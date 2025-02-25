@@ -1743,10 +1743,10 @@ private:
     static constexpr const int _required_num_providers = 1;
 
 private:
-    std::string _lib_path;
-    std::string _backend_name;
-    std::string _model_name;               // name of prebuilt QNN model, might be used in the future
-    BackendIdType _backend_id;
+    std::string     _lib_path;
+    std::string     _backend_name;
+    std::string     _model_name; // name of prebuilt QNN model, might be used in the future
+    BackendIdType   _backend_id;
 
     bool _debug_tensor                      = false; // flag to indicate if requested graph is to be run in debug mode
     bool _do_node_validations               = true;  // flag to indicate whether all add_node calls need to be validated
@@ -1754,17 +1754,15 @@ private:
 
     ggml_qnn_profile_level _profile_level   = ggml_qnn_profile_level::profile_detail;
 
-    qnn_interface _qnn_interface;
+    void * _system_lib_handle               = nullptr;
 
-    void * _system_lib_handle = nullptr;
+    Qnn_GraphHandle_t _qnn_graph_handle     = nullptr;
 
-    Qnn_GraphHandle_t _qnn_graph_handle = nullptr;
-
-    Qnn_LogHandle_t _qnn_log_handle = nullptr;
+    Qnn_LogHandle_t _qnn_log_handle         = nullptr;
 
     Qnn_ProfileHandle_t _qnn_profile_handle = nullptr;
 
-    Qnn_DeviceHandle_t _qnn_device_handle = nullptr;
+    Qnn_DeviceHandle_t _qnn_device_handle   = nullptr;
 
     Qnn_BackendHandle_t _qnn_backend_handle = nullptr;
 
@@ -1772,10 +1770,11 @@ private:
 
     QnnSystemContext_Handle_t _qnn_system_handle = nullptr;
 
-    QnnHtpDevice_PerfInfrastructure_t *_qnn_htp_perfinfra = nullptr;
-    uint32_t _qnn_power_configid = 1;
-    uint32_t _qnn_rpc_pollingtime = 9999; // 0-10000 us for high performing
+    QnnHtpDevice_PerfInfrastructure_t * _qnn_htp_perfinfra = nullptr;
+    uint32_t _qnn_power_configid            = 1;
+    uint32_t _qnn_rpc_pollingtime           = 9999; // 0-10000 us for high performing
 
+    qnn_interface _qnn_interface;
     QNN_INTERFACE_VER_TYPE _qnn_raw_interface;
     QNN_SYSTEM_INTERFACE_VER_TYPE _qnn_raw_system_interface;
 
@@ -1787,7 +1786,6 @@ private:
     static std::unordered_map<std::string, BackendIdType> _lib_path_to_backend_id;
     static std::unordered_map<BackendIdType, const QnnInterface_t *> _loaded_backend;
 
-    void * _rpc_lib_handle = nullptr;
     std::atomic_bool _rpcmem_initialized{false};
     pfn_rpc_mem_alloc _pfn_rpc_mem_alloc;
     pfn_rpc_mem_free _pfn_rpc_mem_free;
@@ -1796,12 +1794,13 @@ private:
     pfn_rpc_mem_deinit _pfn_rpc_mem_deinit;
     std::unordered_map<void *, void *> _rpcmem_store_map;
     std::unordered_map<void *, size_t> _rpcmem_usage_map;
-    size_t                             _rpcmem_capacity = 512; // mempool size  in Mbytes
     size_t                             _rpcmem_usage    = 0;   // mempool usage in Mbytes
+    size_t                             _rpcmem_capacity = 512; // mempool size  in Mbytes
 
     std::string _graph_name;
     QNNBackend _device_id;
-    bool       _enable_qnn_rpc = false; //TODO:unknown issue with QNN RPC feature
+    void * _rpc_lib_handle      = nullptr;
+    bool       _enable_qnn_rpc  = false; //TODO:unknown issue with QNN RPC feature
 
     DISABLE_COPY(qnn_instance);
     DISABLE_MOVE(qnn_instance);
@@ -1925,13 +1924,13 @@ int qnn_instance::register_rpcmem(void * p_data, Qnn_Tensor_t * p_tensor) {
 
     if (is_rpcmem_registered((QNN_VER_PTR(*p_tensor)->memHandle))) {
         GGMLQNN_LOG_WARN("tensor %s has been registered shared memory\n", (QNN_VER_PTR(*p_tensor)->name));
-        return 4;
+        return 3;
     }
 
     int32_t mem_fd = rpcmem_to_fd(p_data);
     if (-1 == mem_fd) {
         GGMLQNN_LOG_WARN("failed to get file descriptor\n");
-        return 5;
+        return 4;
     }
     GGMLQNN_LOG_DEBUG("mem_fd %d\n", mem_fd);
     Qnn_MemDescriptor_t descriptor = {
@@ -1947,9 +1946,8 @@ int qnn_instance::register_rpcmem(void * p_data, Qnn_Tensor_t * p_tensor) {
             /*numDescriptors=*/1,
             &handle);
     if (error != QNN_SUCCESS) {
-        GGMLQNN_LOG_WARN("failed to register shared memory, error %d, %s\n", QNN_GET_ERROR_CODE(error),
-              strerror(error));
-        return 6;
+        GGMLQNN_LOG_WARN("failed to register shared memory, error %d, %s\n", QNN_GET_ERROR_CODE(error), strerror(error));
+        return 5;
     } else {
         GGMLQNN_LOG_INFO("tensor %s successfully register shared memory\n", (QNN_VER_PTR(*p_tensor)->name));
     }
@@ -1988,8 +1986,7 @@ Qnn_MemHandle_t  qnn_instance::register_rpcmem(void * p_data, const uint32_t ran
             {{mem_fd}}
     };
     Qnn_MemHandle_t handle = nullptr;
-    auto error = _qnn_interface.qnn_mem_register(_qnn_context_handle, &descriptor,
-            /*numDescriptors=*/1, &handle);
+    auto error = _qnn_interface.qnn_mem_register(_qnn_context_handle, &descriptor, /*numDescriptors=*/1, &handle);
     if (error != QNN_SUCCESS) {
         GGMLQNN_LOG_WARN("failed to register shared memory, error %d, %s", QNN_GET_ERROR_CODE(error), strerror(error));
         return nullptr;
@@ -2407,7 +2404,7 @@ int qnn_instance::qnn_init(const QnnSaver_Config_t ** saver_config) {
             if (QNN_PROFILE_NO_ERROR != _qnn_raw_interface.profileCreate(
                     _qnn_backend_handle, QNN_PROFILE_LEVEL_BASIC, &_qnn_profile_handle)) {
                 GGMLQNN_LOG_WARN("unable to create profile handle in the backend\n");
-                return 7;
+                return 6;
             } else {
                 GGMLQNN_LOG_DEBUG("initialize qnn profile successfully\n");
             }
@@ -2433,7 +2430,7 @@ int qnn_instance::qnn_init(const QnnSaver_Config_t ** saver_config) {
 #endif
     if (nullptr == _rpc_lib_handle) {
         GGMLQNN_LOG_WARN("failed to load qualcomm's rpc lib, error:%s\n", dlerror());
-        return 9;
+        return 8;
     } else {
         GGMLQNN_LOG_DEBUG("load rpcmem lib successfully\n");
         set_rpcmem_initialized(true);
@@ -2447,7 +2444,7 @@ int qnn_instance::qnn_init(const QnnSaver_Config_t ** saver_config) {
         || nullptr == _pfn_rpc_mem_to_fd) {
         GGMLQNN_LOG_WARN("unable to access symbols in QNN RPC lib. dlerror(): %s", dlerror());
         dlclose(_rpc_lib_handle);
-        return 10;
+        return 9;
     }
 
     if (nullptr != _pfn_rpc_mem_init) // make Qualcomm's SoC based low-end phone happy
@@ -2459,7 +2456,7 @@ int qnn_instance::qnn_init(const QnnSaver_Config_t ** saver_config) {
                                &_qnn_context_handle);
     if (nullptr == _qnn_context_handle) {
         GGMLQNN_LOG_WARN("why failed to initialize qnn context, error:%s\n", strerror(errno));
-        return 8;
+        return 10;
     } else {
         GGMLQNN_LOG_DEBUG("initialize qnn context successfully\n");
     }
@@ -2751,14 +2748,18 @@ static bool ggml_qnn_can_handle_op(const struct ggml_tensor * tensor) {
         return true;
     }
     if (ggml_is_empty(tensor) || tensor->op == GGML_OP_RESHAPE
-    || tensor->op == GGML_OP_TRANSPOSE || tensor->op == GGML_OP_VIEW
-    || tensor->op == GGML_OP_PERMUTE) {
+        || tensor->op == GGML_OP_TRANSPOSE
+        || tensor->op == GGML_OP_VIEW
+        || tensor->op == GGML_OP_PERMUTE
+        ) {
         return false;
     }
 
     //TODO: support other op
-    bool supported_op = ((tensor->op == GGML_OP_ADD) || (tensor->op == GGML_OP_MUL_MAT)
-            || (tensor->op == GGML_OP_MUL));
+    bool supported_op = ((tensor->op == GGML_OP_ADD)
+                         || (tensor->op == GGML_OP_MUL_MAT)
+                         || (tensor->op == GGML_OP_MUL)
+                        );
     if (!supported_op) {
         return false;
     }
@@ -2766,14 +2767,14 @@ static bool ggml_qnn_can_handle_op(const struct ggml_tensor * tensor) {
     struct ggml_tensor * src0 = tensor->src[0];
     struct ggml_tensor * src1 = tensor->src[1];
 
-    const int64_t ne00 = tensor->src[0]->ne[0];
-    const int64_t ne01 = tensor->src[0]->ne[1];
+    const int64_t ne00  = tensor->src[0]->ne[0];
+    const int64_t ne01  = tensor->src[0]->ne[1];
 
-    const int64_t ne10 = tensor->src[1]->ne[0];
-    const int64_t ne11 = tensor->src[1]->ne[1];
+    const int64_t ne10  = tensor->src[1]->ne[0];
+    const int64_t ne11  = tensor->src[1]->ne[1];
 
-    const int64_t ne0 = tensor->ne[0];
-    const int64_t ne1 = tensor->ne[1];
+    const int64_t ne0   = tensor->ne[0];
+    const int64_t ne1   = tensor->ne[1];
 
     const uint32_t src0_rank = ggml_get_tensor_rank(src0);
     const uint32_t src1_rank = ggml_get_tensor_rank(src1);
