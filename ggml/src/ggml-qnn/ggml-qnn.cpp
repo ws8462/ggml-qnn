@@ -2179,7 +2179,7 @@ int qnn_instance::load_system() {
     if (nullptr == _system_lib_handle) {
         GGMLQNN_LOG_WARN("can not open QNN library %s, error: %s\n", system_lib_path.c_str(), dlerror());
         //re-try with default path of QNN binary runtime lib
-        _lib_path = "/data/local/tmp/";
+        _lib_path = "/data/data/com.termux/files/usr/lib/";
         system_lib_path = _lib_path + "libQnnSystem.so";
 #if defined(__ANDROID__) || defined(__linux__)
         _system_lib_handle = dlopen(system_lib_path.c_str(), RTLD_NOW | RTLD_LOCAL);
@@ -3567,7 +3567,7 @@ static ggml_backend_t ggml_backend_qnn_device_init_backend(ggml_backend_dev_t de
         params = 0;
     }
     ggml_backend_t qnn_backend = ggml_backend_qnn_init((int) (intptr_t) params,
-                                                       "/data/local/tmp/");
+                                                       "/data/data/com.termux/files/usr/lib/");
 
     return qnn_backend;
 
