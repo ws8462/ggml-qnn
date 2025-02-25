@@ -3762,7 +3762,7 @@ ggml_backend_reg_t ggml_backend_qnn_reg() {
  */
 ggml_backend_t ggml_backend_qnn_init(size_t device, const char * qnn_lib_path) {
     int result = 0;
-    device = 2;
+    
     if (nullptr == qnn_lib_path)
         return nullptr;
 
