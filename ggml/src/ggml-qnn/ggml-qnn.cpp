@@ -2391,8 +2391,9 @@ int qnn_instance::qnn_init(const QnnSaver_Config_t ** saver_config) {
 
     auto qnnstatus = _qnn_raw_interface.deviceCreate(
             _qnn_log_handle, nullptr, &_qnn_device_handle);
+    
     if (QNN_SUCCESS != qnnstatus && QNN_DEVICE_ERROR_UNSUPPORTED_FEATURE != qnnstatus) {
-        GGMLQNN_LOG_WARN("failed to create QNN device\n");
+        GGMLQNN_LOG_WARN("failed to create QNN device qnn_success:[%d] qnn_status:[%d] qnn_feature:[%d]\n", QNN_SUCCESS, qnnstatus, QNN_DEVICE_ERROR_UNSUPPORTED_FEATURE);
     } else {
         GGMLQNN_LOG_INFO("create device successfully\n");
     }
